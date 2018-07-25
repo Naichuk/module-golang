@@ -20,14 +20,15 @@ func Send(n *Node) {
 	time.Sleep(1 * time.Second)
 	if err != nil {
 		fmt.Println(err)
+	} else {
+		tosend, _ := json.Marshal(n)
+		s := string(tosend)
+		conn.Write([]byte(s))
+		conn.Close()
 	}
-	tosend, _ := json.Marshal(n)
-	s := string(tosend)
-	conn.Write([]byte(s))
-	conn.Close()
 }
 
-func Listen() {
+func Listen(n *Node) {
 
 	ln, err := net.Listen("tcp", ":1337")
 	if err != nil {
@@ -40,7 +41,7 @@ func Listen() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		var n Node
+		//var n Node
 		for {
 			p, err := conn.Read(tmp)
 			if err != nil {
@@ -51,7 +52,8 @@ func Listen() {
 		er := json.Unmarshal(buf, &n)
 		fmt.Println(er)
 		buf = buf[:0]
-		fmt.Println("Message Received:", n, "\n")
+		//fmt.Println("Message Received:", n, "\n")
+		//return n
 		//if conn != nil {
 		//go handleConnection(&conn)
 	}

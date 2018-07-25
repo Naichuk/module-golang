@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 func main() {
 	c := make(chan int)
 	var l Node = NewNode()
@@ -7,10 +9,11 @@ func main() {
 
 	l.State = 1
 	//l.AppendMessage("hello I'm leader", getSelfIp())
-	go Run(&l)
 	l.AppendMessage("hello I'm leader")
+	go Run(&l)
 	f.SetMessage("Helloasasd")
-	Send(&f)
+	time.Sleep(4 * time.Second)
+	go Send(&f)
 	/*go StartListening()
 	l.addVote()
 	l.SetState(22)
