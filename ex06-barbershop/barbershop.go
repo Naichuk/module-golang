@@ -1,50 +1,73 @@
-/*package main
+package main
 
-import {
+import (
 	"fmt"
 	"sync"
 	"time"
-}
+)
 
 const seats = 3
+
 var process = new(sync.WaitGroup)
 
-func client() {
-    for {
-        time.Sleep(3 * time.Second)
-        clients <- &Client{}
-    }
+func client(Wr chan chan string, Cl chan string, name string) {
+	flag := 0
+	for {
+		fmt.Printf("%s has come to the barbershop\n", name)
+		select {
+		case Wr <- Cl:
+			Cl <- name
+			<-Cl
+			process.Done()
+			flag = 1
+		default:
+			fmt.Printf("Waiting room is full, %s will come later\n", name)
+			time.Sleep(5 * time.Second)
+		}
+		if flag == 1 {
+			break
+		}
+	}
 }
 
-
-func barber(c chan chan string) {
+func barber(Wr chan chan string) {
+	fmt.Printf("Welcome to Maksi's Awesome Barbershop!\n\n")
 	for {
-		select{
-		case visitor := <-c:
-			name := <- visitor
-			fmt.Print("%s is on ")
+		select {
+		case Cl := <-Wr:
+			name := <-Cl
+			fmt.Printf("%s is on haircutting now\n", name)
+			time.Sleep(5 * time.Second)
+			fmt.Printf("%ss haircut is done\n", name)
+			Cl <- "ok"
+		default:
+			fmt.Printf("Barber Maksi is going to sleep\n")
+			visitor := <-Wr
+			fmt.Printf("Barber Maksi has woke up\n")
+			name := <-visitor
+			fmt.Printf("%s is on haircutting now\n", name)
+			time.Sleep(8 * time.Second)
+			fmt.Printf("%s haircut is done\n", name)
+			visitor <- "done"
 		}
 
 	}
 
-
 }
 
-
-
-
-
 func main() {
-	var clientNames []string = {"Andrew", "Daniel", "Ania", "Pasha", "Anton"}
-	clientNumber = len(clientNames)
+	clientNames := [5]string{"Andrew", "Daniel", "Ania", "Pasha", "Anton"}
+	clientNumber := len(clientNames)
 	process.Add(clientNumber)
-	var WaitingRoom chan chan string
+	WaitingRoom := make(chan chan string, seats)
 	go barber(WaitingRoom)
 	for i := 0; i < clientNumber; i++ {
-		time.Sleep(5 * time.Second)
-		go (i)
+		c := make(chan string)
+		time.Sleep(3 * time.Second)
+		go client(WaitingRoom, c, clientNames[i])
+		time.Sleep(2 * time.Second)
 	}
 	process.Wait()
-	fmt.Println("End of the day")
+	fmt.Println("\n\nMaksi's Awesome Barbershop is closed. See you tomorrow!")
 	time.Sleep(2 * time.Second)
-}*/
+}
