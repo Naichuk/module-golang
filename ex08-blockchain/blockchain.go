@@ -1,14 +1,15 @@
-/*package main
+package main
 
 import (
 	"bytes"
 	"crypto/sha256"
+	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
 	"time"
-	"database/sql"
-	"github.com/mattn/go-sqlite3"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Block struct {
@@ -26,20 +27,32 @@ func (b *Block) SetHash() {
 	b.Hash = hash[:]
 }
 
-func NewBlock(data string, prevBlockHash []byte) *Block { //creating a new block
+func NewBlock(data string, prevBlockHash []byte) *Block {
 	block := &Block{time.Now().Unix(), []byte(data), prevBlockHash, []byte{}}
 	block.SetHash()
 	return block
 }
 
-type Blockchain struct { //blockchain is created
-	blocks []*Block //array of blocks
+type Blockchain struct {
+	blocks []*Block
 }
 
-func (bc *Blockchain) AddBlock(data string) { //adding blocks into blockchain
-	prevBlock := bc.blocks[len(bc.blocks)-1]
-	newBlock := NewBlock(data, prevBlock.Hash)
+func (bc *Blockchain) AddBlock(database *sql.DB, data string) *Block {
+	rows, err := database.Query("SELECT * FROM Block WHERE id = (SELECT MAX(id)  FROM Block)")
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	var id int
+	p := Block{}
+	rows.Next()
+	g := rows.Scan(&id, &p.Timestamp, &p.Data, &p.Hash, &p.PrevBlockHash)
+	if g != nil {
+		fmt.Println(g)
+	}
+	newBlock := NewBlock(data, p.Hash)
 	bc.blocks = append(bc.blocks, newBlock)
+	return newBlock
 }
 
 func NewGenesisBlock() *Block {
@@ -50,89 +63,72 @@ func NewBlockchain() *Blockchain {
 	return &Blockchain{[]*Block{NewGenesisBlock()}}
 }
 
+func db_Block(block *Block, database *sql.DB) *sql.Stmt {
 
-
-type Item struct {
-
-	Id int
-	Data string
-	Hash []byte
-	prevHash []byte
-}
-
-
-
-func InitDB(filepath string) *sql.DB {
-	db, err := sql.Open("sqlite3", filepath)
-	if err != nil { panic(err) }
-	if db == nil { panic("db nil") }
-	return db
-}
-
-
-func CreateTable(db *sql.DB) {
-	sql_table := `
-	CREATE TABLE IF NOT EXISTS block(
-		Id INTEGER PRIMARY KEY,
-		timestamp INTEGER,
-		data BLOB,
-		hash TEXT
-		prevHash TEXT
-	);
-	`
-	_, err := db.Exec(sql_table)
-	if err != nil { panic(err) }
-}
-
-
-
-func StoreItem(db *sql.DB, items []Item) {
-	sql_additem := `
-	INSERT OR REPLACE INTO items(
-		Id,
-		timestamp
-		data,
-		hash,
-		prevHash
-	) values(?, CURRENT_TIMESTAMP, ?, ?, ?)
-	`
-
-	stmt, err := db.Prepare(sql_additem)
-	if err != nil { panic(err) }
-	defer stmt.Close()
-
-	for _, item := range items {
-		_, err2 := stmt.Exec(item.Id, item.Name, item.Phone)
-		if err2 != nil { panic(err2) }
+	statement, err := database.Prepare("INSERT INTO Block (timestamp, data, hash, prevHash) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		panic(err)
 	}
+	statement.Exec(block.Timestamp, block.Data, block.Hash,
+		block.PrevBlockHash)
+	return statement
 }
 
-
-
-
+func isGenesis(database *sql.DB) bool {
+	rows, _ := database.Query("SELECT data FROM Block WHERE id = 1")
+	var data string
+	defer rows.Close()
+	for rows.Next() {
+		rows.Scan(&data)
+		return false
+	}
+	return true
+}
 
 func main() {
-		db, err:= sql.Open("sqlite3", "./blockchain.db")
+	bc := NewBlockchain()
+	db, err := sql.Open("sqlite3", "blockchain_db.db")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+	db.Exec("CREATE TABLE IF NOT EXISTS Block (id INTEGER PRIMARY KEY, timestamp INTEGER, data BLOB, hash TEXT, prevHash TEXT)")
+	if err != nil {
+		panic(err)
+	}
+	if isGenesis(db) {
+		bc0 := NewGenesisBlock()
+		db_Block(bc0, db)
+	}
+
+	if os.Args[1] == "add" {
+		bc2 := bc.AddBlock(db, os.Args[2])
+		db_Block(bc2, db)
+		fmt.Println("Transaction was added to the blockchain")
+	}
+	if os.Args[1] == "list" {
+		rows, err := db.Query("select * from Block")
 		if err != nil {
-		    panic(err)
+			panic(err)
 		}
-		defer db.Close()
-		result, err := db.Exec("insert into products (product, price )values (os.Args[2], os.Args[3])",
-		if err != nil{
-		    panic(err)
-		    }
+		defer rows.Close()
+		products := []Block{}
+		var id int
+		for rows.Next() {
+			p := Block{}
+			err := rows.Scan(&id, &p.Timestamp, &p.Data, &p.Hash, &p.PrevBlockHash)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			products = append(products, p)
 		}
-		bc := NewBlockchain()
-		switch os.Args[1] {
-		case "add":
-			bc.AddBlock(os.Args[2])
-			fmt.Println("Transaction was added to the blockchain")
-		case "list":
-		for _, block := range bc.blocks {
-			fmt.Printf("Prev. hash: %x\n", block.PrevBlockHash)
-			fmt.Printf("Data: %s\n", block.Data)
-			fmt.Printf("Hash: %x\n", block.Hash)
+		for _, p := range products {
+			fmt.Printf("Prev Hash: %x\n", p.PrevBlockHash)
+			fmt.Printf("Data: %s\n", p.Data)
+			fmt.Printf("Hash: %x\n", p.Hash)
 			fmt.Println()
 		}
 	}
-	}*/
+
+}
